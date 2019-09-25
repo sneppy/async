@@ -29,7 +29,7 @@ bool WorkerPool::submitJob(std::function<void()> && inJob)
 	if (jobs.pushBack(std::move(inJob)))
 	{
 		// Fire event
-		event->fire<Event::State::TRIGGER_ONE>();
+		event->fire<Event::TRIGGER_ONE>();
 		return true;
 	}
 	else return false;		
