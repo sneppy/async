@@ -4,6 +4,7 @@
 
 #include "critical_section.h"
 #include "event.h"
+#include "count_ref.h"
 
 /**
  * 
@@ -16,10 +17,7 @@ protected:
 	Event * event;
 
 	/// Future result
-	T result;
-
-	/// Has result flag
-	bool bHasResult;
+	CountRefPtr<T> result;
 
 public:
 	/**
@@ -28,7 +26,6 @@ public:
 	inline FutureBase()
 		: event{nullptr}
 		, result{}
-		, bHasResult{}
 	{
 		//
 	}
@@ -36,26 +33,31 @@ public:
 	/**
 	 * Deleted copy constructor
 	 */
-	FutureBase(const FutureBase & other) = delete;
+	FutureBase(const FutureBase & other)
+		: event{other.event}
+		, result{other.result}
+	{
+
+	}
 
 	/**
 	 * Move constructor
 	 */
 	FutureBase(FutureBase && other)
 		: event{other.event}
-		, bHasResult{other.bHasResult}
+		, result{std::move(other.result)}
 	{
-		if (other.bHasResult)
-			result = std::move(other.result);
-		
 		other.event = nullptr;
-		other.bHasResult = false;
 	}
 
 	/**
 	 * Deleted copy assignment
 	 */
-	FutureBase & operator=(const FutureBase & other) = delete;
+	FutureBase & operator=(const FutureBase & other)
+	{
+		event = other.event;
+		result = other.result;
+	}
 
 	/**
 	 * Move assignment
@@ -63,11 +65,9 @@ public:
 	FutureBase & operator=(FutureBase && other)
 	{
 		event = other.event;
-		if ((bHasResult = other.bHasResult))
-			result = std::move(other.result);
+		result = std::move(other.result);
 		
 		other.event = nullptr;
-		other.bHasResult = false;
 	}
 
 	/**
@@ -77,6 +77,7 @@ public:
 	{
 		// Init resources
 		event = new Event;
+		result = new RefPtr<T>{};
 	}
 
 	/**
@@ -103,8 +104,7 @@ public:
 	void set(TT && inT)
 	{
 		// Set result value and flag
-		result = std::forward<TT>(inT);
-		bHasResult = true;
+		result->set(std::forward<TT>(inT));
 
 		// Signal completion
 		event->fire<Event::TRIGGER_ALL>();
@@ -120,12 +120,23 @@ public:
 	bool get(T & outT)
 	{
 		// Wait until result is available
-		do event->wait(); while (!bHasResult);
+		do event->wait(); while (!result->isValid());
 
 		// Move result out
-		outT = std::move(result);
+		outT = result->get();
 
 		// * Right now always returns true
 		return true;
+	}
+
+	/**
+	 * Cast to result
+	 * 
+	 * @return result
+	 */
+	inline operator T()
+	{
+		T future;
+		return get(future) ? future : T{};
 	}
 };
